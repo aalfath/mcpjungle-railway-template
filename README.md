@@ -35,7 +35,7 @@ There are no prompts. Optional settings you can add yourself: `OTEL_ENABLED=true
    ```sh
    mcpjungle register --name context7 --url https://mcp.context7.com/mcp
    cat > time.json <<'JSON'
-   {"name": "time", "transport": "stdio", "command": "uvx", "args": ["mcp-server-time"], "session_mode": "stateful"}
+   {"name": "time", "transport": "stdio", "command": "uvx", "args": ["mcp-server-time==2026.11.18"], "session_mode": "stateful"}
    JSON
    mcpjungle register -c time.json
    ```
@@ -57,7 +57,7 @@ Tools show up as `<server>__<tool>`. For finer access control, create more clien
 ## Notes and limits
 
 - **Web dashboard:** upstream serves its dashboard only in development mode, which has no authentication, so this template doesn't expose it. Manage the gateway with the CLI or the REST API.
-- **Memory:** the gateway uses about 20 MB. Each STDIO MCP server is a child process (a Node `npx` server takes about 50–60 MB). On Railway's Free plan (0.5 GB per service), register STDIO servers with `"session_mode": "stateful"`: in the default `stateless` mode every tool call starts a new process, and in our test 10 parallel calls to one Node server ran out of memory (the gateway itself kept running). Remote (Streamable HTTP) servers cost almost nothing.
+- **Memory:** the gateway uses about 20–40 MB. Each STDIO MCP server is a child process: a Node `npx` server takes about 50–60 MB, a Python `uvx` server about 70 MB (our test with two STDIO servers and one remote server used about 120 MB). Pin STDIO server versions (`pkg@1.2.3`, `pkg==1.2.3`) so a new upstream release can't break them. On Railway's Free plan (0.5 GB per service), register STDIO servers with `"session_mode": "stateful"`: in the default `stateless` mode every tool call starts a new process, and in our test 10 parallel calls to one Node server ran out of memory (the gateway itself kept running). Remote (Streamable HTTP) servers cost almost nothing.
 - **No Docker:** STDIO servers that need Docker (`docker run …`) can't run on Railway. Use their `npx`/`uvx` form or a remote URL.
 - **Admin token:** the admin token is stored in Postgres at first boot. If you change `MCPJUNGLE_ADMIN_TOKEN` later, rotate it first with `mcpjungle update user admin --access-token NEW` (logged in with the old token); otherwise the start script logs a warning and keeps the old one.
 
