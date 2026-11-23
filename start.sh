@@ -126,7 +126,8 @@ if [ $ok -eq 0 ]; then
   umask 077
   printf 'registry_url: %s\naccess_token: %s\n' "$BASE" "$ADMIN_TOKEN" > "${HOME:-/root}/.mcpjungle.conf" 2>/dev/null || true
 fi
-log "ready: MCP endpoint /mcp (Streamable HTTP), /sse (SSE), health /health"
+PUB="${RAILWAY_PUBLIC_DOMAIN:+https://$RAILWAY_PUBLIC_DOMAIN}"
+log "ready: MCP endpoint ${PUB}/mcp (Streamable HTTP, send 'Authorization: Bearer <MCPJUNGLE_CLIENT_TOKEN>'), health ${PUB}/health"
 
 wait "$PID"; rc=$?
 # Railway's ON_FAILURE policy restarts only on a non-zero exit.
