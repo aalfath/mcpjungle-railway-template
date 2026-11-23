@@ -39,20 +39,28 @@ export UV_CACHE_DIR="${UV_CACHE_DIR:-$DATA_DIR/uv-cache}"
 export npm_config_update_notifier=false
 
 BASE="http://127.0.0.1:${PORT}"
-# The server (and any STDIO MCP server it starts) doesn't get the two tokens.
-env -u MCPJUNGLE_ADMIN_TOKEN -u MCPJUNGLE_CLIENT_TOKEN /mcpjungle start &
-PID=$!
-
-on_term() { log "stopping"; kill -TERM "$PID" 2>/dev/null; wait "$PID"; exit 0; }
+PID=""
+on_term() { log "stopping"; [ -n "$PID" ] && kill -TERM "$PID" 2>/dev/null && wait "$PID"; exit 0; }
 trap on_term TERM INT
 
-# Wait for the HTTP server (migrations run before it listens).
-for i in $(seq 1 120); do
-  kill -0 "$PID" 2>/dev/null || { wait "$PID"; rc=$?; die "mcpjungle exited during startup (code $rc)"; }
-  curl -fsS -o /dev/null "$BASE/health" && break
-  sleep 1
+# Start the server. It exits at once if Postgres isn't reachable yet (common on a
+# first deploy), so retry for up to ~3 minutes before giving up with a non-zero exit.
+# The server (and any STDIO MCP server it starts) doesn't get the two tokens.
+healthy=0
+for attempt in $(seq 1 30); do
+  env -u MCPJUNGLE_ADMIN_TOKEN -u MCPJUNGLE_CLIENT_TOKEN /mcpjungle start &
+  PID=$!
+  for i in $(seq 1 60); do
+    kill -0 "$PID" 2>/dev/null || break
+    if curl -fs -o /dev/null "$BASE/health"; then healthy=1; break; fi
+    sleep 1
+  done
+  [ $healthy -eq 1 ] && break
+  if kill -0 "$PID" 2>/dev/null; then kill "$PID"; wait "$PID"; die "mcpjungle did not answer /health within 60 s"; fi
+  wait "$PID"; log "mcpjungle exited during startup (code $?), probably waiting for Postgres; retry $attempt/30 in 5 s"
+  sleep 5
 done
-curl -fsS -o /dev/null "$BASE/health" || { kill "$PID"; die "mcpjungle did not answer /health within 120 s"; }
+[ $healthy -eq 1 ] || die "mcpjungle could not start (is Postgres up and DATABASE_URL right?)"
 
 api() { # api METHOD PATH TOKEN [JSON]  -> prints body, then the HTTP code on the last line
   local m=$1 p=$2 t=$3 d=${4:-}
